@@ -1,7 +1,7 @@
 mod token_output_stream;
 use anyhow::{Error as E, Result};
 use clap::Parser;
-mod utils;
+mod candle_server_utils;
 use candle_transformers::models::gemma::{Config as Config1, Model as Model1};
 // use candle_transformers::models::gemma2::{Config as Config2, Model as Model2};
 
@@ -180,14 +180,16 @@ struct Args {
 }
 
 fn main() -> Result<()> {
-    let args = Args::parse();
+    let args = Args::parse(); // [TODO] remove
+
+    // log accelerators
     println!(
-        "avx: {}, neon: {}, simd128: {}, f16c: {}",
-        candle_core::utils::with_avx(),
-        candle_core::utils::with_neon(),
-        candle_core::utils::with_simd128(),
-        candle_core::utils::with_f16c()
+        "cuda: {}, metal: {}",
+        candle_core::utils::cuda_is_available(),
+        candle_core::utils::metal_is_available(),
     );
+
+    // log parameters
     println!(
         "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
         args.temperature.unwrap_or(0.),
@@ -217,13 +219,13 @@ fn main() -> Result<()> {
             .split(',')
             .map(std::path::PathBuf::from)
             .collect::<Vec<_>>(),
-        None => utils::hub_load_safetensors(&repo, "model.safetensors.index.json")?,
+        None => candle_server_utils::hub_load_safetensors(&repo, "model.safetensors.index.json")?,
     };
     println!("retrieved the files in {:?}", start.elapsed());
     let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
 
     let start = std::time::Instant::now();
-    let device = utils::device(args.cpu)?;
+    let device = candle_server_utils::device(args.cpu)?;
     let dtype = if device.is_cuda() {
         DType::BF16
     } else {
