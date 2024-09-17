@@ -3,7 +3,6 @@ use anyhow::{Error as E, Result};
 use clap::Parser;
 mod candle_server_utils;
 use candle_transformers::models::gemma::{Config as Config1, Model as Model1};
-// use candle_transformers::models::gemma2::{Config as Config2, Model as Model2};
 
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
@@ -12,22 +11,9 @@ use hf_hub::{api::sync::Api, Repo, RepoType};
 use token_output_stream::TokenOutputStream;
 use tokenizers::Tokenizer;
 
-enum Model {
-    V1(Model1),
-    // V2(Model2),
-}
-
-impl Model {
-    fn forward(&mut self, input_ids: &Tensor, pos: usize) -> candle_core::Result<Tensor> {
-        match self {
-            Self::V1(m) => m.forward(input_ids, pos),
-            // Self::V2(m) => m.forward(input_ids, pos),
-        }
-    }
-}
 
 struct TextGeneration {
-    model: Model,
+    model: Model1,
     device: Device,
     tokenizer: TokenOutputStream,
     logits_processor: LogitsProcessor,
@@ -38,7 +24,7 @@ struct TextGeneration {
 impl TextGeneration {
     #[allow(clippy::too_many_arguments)]
     fn new(
-        model: Model,
+        model: Model1,
         tokenizer: Tokenizer,
         seed: u64,
         temp: Option<f64>,
@@ -213,8 +199,7 @@ fn main() -> Result<()> {
     let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device)? };
 
     let config: Config1 = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
-    let model_temp = Model1::new(args.use_flash_attn, &config, vb)?;
-    let model = Model::V1(model_temp);
+    let model = Model1::new(args.use_flash_attn, &config, vb)?;
 
     println!("loaded the model in {:?}", start.elapsed());
 
