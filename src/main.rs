@@ -136,9 +136,6 @@ struct Args {
     #[arg(long)]
     prompt: String,
 
-    /// The temperature used to generate samples.
-    #[arg(long)]
-    temperature: Option<f64>,
 
     /// Nucleus sampling probability cutoff.
     #[arg(long)]
@@ -190,9 +187,11 @@ fn main() -> Result<()> {
     );
 
     // log parameters
+    const TEMPERATURE: Option<f64> = Some(0.0);
+
     println!(
         "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
-        args.temperature.unwrap_or(0.),
+        TEMPERATURE.unwrap(),
         args.repeat_penalty,
         args.repeat_last_n
     );
@@ -244,7 +243,7 @@ fn main() -> Result<()> {
         model,
         tokenizer,
         args.seed,
-        args.temperature,
+        TEMPERATURE,
         args.top_p,
         args.repeat_penalty,
         args.repeat_last_n,
