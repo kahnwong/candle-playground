@@ -1,8 +1,3 @@
-#[cfg(feature = "mkl")]
-extern crate intel_mkl_src;
-
-#[cfg(feature = "accelerate")]
-extern crate accelerate_src;
 mod token_output_stream;
 use anyhow::{Error as E, Result};
 use clap::Parser;
