@@ -164,10 +164,6 @@ struct Args {
     #[arg(long)]
     weight_files: Option<String>,
 
-    /// Penalty to be applied for repeating tokens, 1. means no penalty.
-    #[arg(long, default_value_t = 1.1)]
-    repeat_penalty: f32,
-
     /// The context size to consider for the repeat penalty.
     #[arg(long, default_value_t = 64)]
     repeat_last_n: usize,
@@ -188,11 +184,13 @@ fn main() -> Result<()> {
 
     // log parameters
     const TEMPERATURE: Option<f64> = Some(0.0);
+    /// Penalty to be applied for repeating tokens, 1. means no penalty.
+    const REPEAT_PENALTY: f32 = 1.1;
 
     println!(
         "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
         TEMPERATURE.unwrap(),
-        args.repeat_penalty,
+        REPEAT_PENALTY,
         args.repeat_last_n
     );
 
@@ -245,7 +243,7 @@ fn main() -> Result<()> {
         args.seed,
         TEMPERATURE,
         args.top_p,
-        args.repeat_penalty,
+        REPEAT_PENALTY,
         args.repeat_last_n,
         &device,
     );
