@@ -6,6 +6,13 @@ uv tool install huggingface_hub
 huggingface-cli login
 ```
 
+## Verify CUDA
+
+```bash
+nvidia-smi --query-gpu=name,compute_cap,driver_version --format=csv
+nvcc --version
+```
+
 ## Usage
 
 ```bash
