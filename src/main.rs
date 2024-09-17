@@ -168,7 +168,7 @@ fn main() -> Result<()> {
         REPEAT_LAST_N
     );
 
-    // ------------ init model ------------
+    // ------------ get assets ------------
     let start = std::time::Instant::now();
 
     let api = Api::new()?;
@@ -186,7 +186,7 @@ fn main() -> Result<()> {
         candle_server_utils::hub_load_safetensors(&repo, "model.safetensors.index.json")?;
     println!("retrieved the files in {:?}", start.elapsed());
 
-    // ------------------------------------
+    // ------------ init model ------------
     let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
 
     let start = std::time::Instant::now();
@@ -203,6 +203,7 @@ fn main() -> Result<()> {
 
     println!("loaded the model in {:?}", start.elapsed());
 
+    // ------------ inference ------------
     let mut pipeline = TextGeneration::new(
         model,
         tokenizer,
