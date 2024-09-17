@@ -112,10 +112,6 @@ impl TextGeneration {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Run on CPU rather than on GPU.
-    #[arg(long)]
-    cpu: bool,
-
     #[arg(long)]
     prompt: String,
 
@@ -139,9 +135,6 @@ struct Args {
 
     #[arg(long)]
     weight_files: Option<String>,
-
-    #[arg(long)]
-    use_flash_attn: bool,
 }
 
 fn main() -> Result<()> {
@@ -190,7 +183,9 @@ fn main() -> Result<()> {
     let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
 
     let start = std::time::Instant::now();
-    let device = candle_server_utils::device(args.cpu)?;
+
+    const IS_USE_CPU: bool = false;
+    let device = candle_server_utils::device(IS_USE_CPU)?;
     let dtype = if device.is_cuda() {
         DType::BF16
     } else {
@@ -198,8 +193,9 @@ fn main() -> Result<()> {
     };
     let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device)? };
 
+
     let config: Config1 = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
-    let model = Model1::new(args.use_flash_attn, &config, vb)?;
+    let model = Model1::new(false, &config, vb)?;
 
     println!("loaded the model in {:?}", start.elapsed());
 

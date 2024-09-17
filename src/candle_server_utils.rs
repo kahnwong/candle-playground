@@ -2,6 +2,7 @@ use candle_core::utils::{cuda_is_available, metal_is_available};
 use candle_core::{Device, Result};
 
 pub fn device(cpu: bool) -> Result<Device> {
+    // [TODO] add log
     if cpu {
         Ok(Device::Cpu)
     } else if cuda_is_available() {
