@@ -18,3 +18,5 @@ nvcc --version
 ```bash
 cargo run --features cuda -- --prompt "Write me a poem about Machine Learning."
 ```
+
+Model location: `~/.cache/huggingface`
