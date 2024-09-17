@@ -164,9 +164,6 @@ struct Args {
     #[arg(long)]
     weight_files: Option<String>,
 
-    /// The context size to consider for the repeat penalty.
-    #[arg(long, default_value_t = 64)]
-    repeat_last_n: usize,
 
     #[arg(long)]
     use_flash_attn: bool,
@@ -186,12 +183,14 @@ fn main() -> Result<()> {
     const TEMPERATURE: Option<f64> = Some(0.0);
     /// Penalty to be applied for repeating tokens, 1. means no penalty.
     const REPEAT_PENALTY: f32 = 1.1;
+    /// The context size to consider for the repeat penalty.
+    const REPEAT_LAST_N: usize= 64;
 
     println!(
         "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
         TEMPERATURE.unwrap(),
         REPEAT_PENALTY,
-        args.repeat_last_n
+        REPEAT_LAST_N
     );
 
     let start = std::time::Instant::now();
@@ -244,7 +243,7 @@ fn main() -> Result<()> {
         TEMPERATURE,
         args.top_p,
         REPEAT_PENALTY,
-        args.repeat_last_n,
+        REPEAT_LAST_N,
         &device,
     );
     pipeline.run(&args.prompt, args.sample_len)?;
