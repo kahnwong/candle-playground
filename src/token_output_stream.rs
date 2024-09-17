@@ -19,10 +19,6 @@ impl TokenOutputStream {
         }
     }
 
-    pub fn into_inner(self) -> tokenizers::Tokenizer {
-        self.tokenizer
-    }
-
     fn decode(&self, tokens: &[u32]) -> Result<String> {
         match self.tokenizer.decode(tokens, true) {
             Ok(str) => Ok(str),
@@ -64,10 +60,6 @@ impl TokenOutputStream {
         } else {
             Ok(None)
         }
-    }
-
-    pub fn decode_all(&self) -> Result<String> {
-        self.decode(&self.tokens)
     }
 
     pub fn get_token(&self, token_s: &str) -> Option<u32> {
