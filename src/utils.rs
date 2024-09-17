@@ -1,5 +1,5 @@
 use candle_core::utils::{cuda_is_available, metal_is_available};
-use candle_core::{Device, Result, Tensor};
+use candle_core::{Device, Result};
 
 pub fn device(cpu: bool) -> Result<Device> {
     if cpu {

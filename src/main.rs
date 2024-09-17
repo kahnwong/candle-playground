@@ -4,20 +4,17 @@ extern crate intel_mkl_src;
 #[cfg(feature = "accelerate")]
 extern crate accelerate_src;
 
-use anyhow::{Error as E, Result};
-use clap::Parser;
-mod utils;
-use candle_transformers::models::quantized_recurrent_gemma::Model as QModel;
-use candle_transformers::models::recurrent_gemma::{Config, Model as BModel};
-
-use candle_core::{DType, Device, Tensor};
 mod token_output_stream;
-
-use token_output_stream::TokenOutputStream;
-
+mod utils;
+use anyhow::{Error as E, Result};
+use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::generation::LogitsProcessor;
+use candle_transformers::models::quantized_recurrent_gemma::Model as QModel;
+use candle_transformers::models::recurrent_gemma::{Config, Model as BModel};
+use clap::Parser;
 use hf_hub::{api::sync::Api, Repo, RepoType};
+use token_output_stream::TokenOutputStream;
 use tokenizers::Tokenizer;
 
 enum Model {
