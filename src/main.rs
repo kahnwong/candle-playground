@@ -3,40 +3,82 @@ extern crate intel_mkl_src;
 
 #[cfg(feature = "accelerate")]
 extern crate accelerate_src;
-
 mod token_output_stream;
-mod utils;
 use anyhow::{Error as E, Result};
+use clap::Parser;
+mod utils;
+use candle_transformers::models::gemma::{Config as Config1, Model as Model1};
+// use candle_transformers::models::gemma2::{Config as Config2, Model as Model2};
+
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::generation::LogitsProcessor;
-use candle_transformers::models::quantized_recurrent_gemma::Model as QModel;
-use candle_transformers::models::recurrent_gemma::{Config, Model as BModel};
-use clap::Parser;
 use hf_hub::{api::sync::Api, Repo, RepoType};
 use token_output_stream::TokenOutputStream;
 use tokenizers::Tokenizer;
-
-enum Model {
-    B(BModel),
-    Q(QModel),
-}
-
-impl Model {
-    fn forward(&mut self, xs: &Tensor, pos: usize) -> candle_core::Result<Tensor> {
-        match self {
-            Self::B(m) => m.forward(xs, pos),
-            Self::Q(m) => m.forward(xs, pos),
-        }
-    }
-}
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, clap::ValueEnum)]
 enum Which {
     #[value(name = "2b")]
     Base2B,
+    #[value(name = "7b")]
+    Base7B,
     #[value(name = "2b-it")]
     Instruct2B,
+    #[value(name = "7b-it")]
+    Instruct7B,
+    #[value(name = "1.1-2b-it")]
+    InstructV1_1_2B,
+    #[value(name = "1.1-7b-it")]
+    InstructV1_1_7B,
+    #[value(name = "code-2b")]
+    CodeBase2B,
+    #[value(name = "code-7b")]
+    CodeBase7B,
+    #[value(name = "code-2b-it")]
+    CodeInstruct2B,
+    #[value(name = "code-7b-it")]
+    CodeInstruct7B,
+    #[value(name = "2-2b")]
+    BaseV2_2B,
+    #[value(name = "2-2b-it")]
+    InstructV2_2B,
+    #[value(name = "2-9b")]
+    BaseV2_9B,
+    #[value(name = "2-9b-it")]
+    InstructV2_9B,
+}
+
+impl Which {
+    fn is_v1(&self) -> bool {
+        match self {
+            Self::Base2B
+            | Self::Base7B
+            | Self::Instruct2B
+            | Self::Instruct7B
+            | Self::InstructV1_1_2B
+            | Self::InstructV1_1_7B
+            | Self::CodeBase2B
+            | Self::CodeBase7B
+            | Self::CodeInstruct2B
+            | Self::CodeInstruct7B => true,
+            Self::BaseV2_2B | Self::InstructV2_2B | Self::BaseV2_9B | Self::InstructV2_9B => false,
+        }
+    }
+}
+
+enum Model {
+    V1(Model1),
+    // V2(Model2),
+}
+
+impl Model {
+    fn forward(&mut self, input_ids: &Tensor, pos: usize) -> candle_core::Result<Tensor> {
+        match self {
+            Self::V1(m) => m.forward(input_ids, pos),
+            // Self::V2(m) => m.forward(input_ids, pos),
+        }
+    }
 }
 
 struct TextGeneration {
@@ -56,26 +98,11 @@ impl TextGeneration {
         seed: u64,
         temp: Option<f64>,
         top_p: Option<f64>,
-        top_k: usize,
         repeat_penalty: f32,
         repeat_last_n: usize,
         device: &Device,
     ) -> Self {
-        let sampling = match temp {
-            None => candle_transformers::generation::Sampling::ArgMax,
-            Some(temperature) => match top_p {
-                None => candle_transformers::generation::Sampling::TopK {
-                    temperature,
-                    k: top_k,
-                },
-                Some(top_p) => candle_transformers::generation::Sampling::TopKThenTopP {
-                    temperature,
-                    k: top_k,
-                    p: top_p,
-                },
-            },
-        };
-        let logits_processor = LogitsProcessor::from_sampling(seed, sampling);
+        let logits_processor = LogitsProcessor::new(seed, temp, top_p);
         Self {
             model,
             tokenizer: TokenOutputStream::new(tokenizer),
@@ -173,15 +200,12 @@ struct Args {
     #[arg(long)]
     top_p: Option<f64>,
 
-    #[arg(long, default_value_t = 250)]
-    top_k: usize,
-
     /// The seed to use when generating random samples.
     #[arg(long, default_value_t = 299792458)]
     seed: u64,
 
     /// The length of the sample to generate (in tokens).
-    #[arg(long, short = 'n', default_value_t = 8000)]
+    #[arg(long, short = 'n', default_value_t = 10000)]
     sample_len: usize,
 
     #[arg(long)]
@@ -208,11 +232,11 @@ struct Args {
     repeat_last_n: usize,
 
     /// The model to use.
-    #[arg(long, default_value = "2b")]
+    #[arg(long, default_value = "2-2b")]
     which: Which,
 
     #[arg(long)]
-    quantized: bool,
+    use_flash_attn: bool,
 }
 
 fn main() -> Result<()> {
@@ -246,8 +270,20 @@ fn main() -> Result<()> {
     let model_id = match &args.model_id {
         Some(model_id) => model_id.to_string(),
         None => match args.which {
-            Which::Base2B => "google/recurrentgemma-2b".to_string(),
-            Which::Instruct2B => "google/recurrentgemma-2b-it".to_string(),
+            Which::InstructV1_1_2B => "google/gemma-1.1-2b-it".to_string(),
+            Which::InstructV1_1_7B => "google/gemma-1.1-7b-it".to_string(),
+            Which::Base2B => "google/gemma-2b".to_string(),
+            Which::Base7B => "google/gemma-7b".to_string(),
+            Which::Instruct2B => "google/gemma-2b-it".to_string(),
+            Which::Instruct7B => "google/gemma-7b-it".to_string(),
+            Which::CodeBase2B => "google/codegemma-2b".to_string(),
+            Which::CodeBase7B => "google/codegemma-7b".to_string(),
+            Which::CodeInstruct2B => "google/codegemma-2b-it".to_string(),
+            Which::CodeInstruct7B => "google/codegemma-7b-it".to_string(),
+            Which::BaseV2_2B => "google/gemma-2-2b".to_string(),
+            Which::InstructV2_2B => "google/gemma-2-2b-it".to_string(),
+            Which::BaseV2_9B => "google/gemma-2-9b".to_string(),
+            Which::InstructV2_9B => "google/gemma-2-9b-it".to_string(),
         },
     };
     let repo = api.repo(Repo::with_revision(
@@ -268,22 +304,10 @@ fn main() -> Result<()> {
             .split(',')
             .map(std::path::PathBuf::from)
             .collect::<Vec<_>>(),
-        None => {
-            if args.quantized {
-                let filename = match args.which {
-                    Which::Base2B => "recurrent-gemma-2b-q4k.gguf",
-                    Which::Instruct2B => "recurrent-gemma-7b-q4k.gguf",
-                };
-                let filename = api.model("lmz/candle-gemma".to_string()).get(filename)?;
-                vec![filename]
-            } else {
-                utils::hub_load_safetensors(&repo, "model.safetensors.index.json")?
-            }
-        }
+        None => utils::hub_load_safetensors(&repo, "model.safetensors.index.json")?,
     };
     println!("retrieved the files in {:?}", start.elapsed());
     let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
-    let config: Config = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
 
     let start = std::time::Instant::now();
     let device = utils::device(args.cpu)?;
@@ -292,15 +316,19 @@ fn main() -> Result<()> {
     } else {
         DType::F32
     };
-    let model = if args.quantized {
-        let vb = candle_transformers::quantized_var_builder::VarBuilder::from_gguf(
-            &filenames[0],
-            &device,
-        )?;
-        Model::Q(QModel::new(&config, vb.pp("model"))?)
+    let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device)? };
+    let model = if args.which.is_v1() {
+        let config: Config1 = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
+        let model = Model1::new(args.use_flash_attn, &config, vb)?;
+        Model::V1(model)
     } else {
-        let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device)? };
-        Model::B(BModel::new(&config, vb.pp("model"))?)
+        // let config: Config2 = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
+        // let model = Model2::new(args.use_flash_attn, &config, vb)?;
+        // Model::V2(model)
+        // [adhoc]
+        let config: Config1 = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
+        let model = Model1::new(args.use_flash_attn, &config, vb)?;
+        Model::V1(model)
     };
 
     println!("loaded the model in {:?}", start.elapsed());
@@ -311,7 +339,6 @@ fn main() -> Result<()> {
         args.seed,
         args.temperature,
         args.top_p,
-        args.top_k,
         args.repeat_penalty,
         args.repeat_last_n,
         &device,
