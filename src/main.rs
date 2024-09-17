@@ -12,20 +12,8 @@ use hf_hub::{api::sync::Api, Repo, RepoType};
 use token_output_stream::TokenOutputStream;
 use tokenizers::Tokenizer;
 
-#[derive(Clone, Debug, Copy, PartialEq, Eq, clap::ValueEnum)]
-enum Which {
-    #[value(name = "1.1-2b-it")]
-    InstructV1_1_2B,
-}
 
-impl Which {
-    fn is_v1(&self) -> bool {
-        match self {
-            Self::InstructV1_1_2B => true,
-            _ => false,
-        }
-    }
-}
+
 
 enum Model {
     V1(Model1),
@@ -191,10 +179,6 @@ struct Args {
     #[arg(long, default_value_t = 64)]
     repeat_last_n: usize,
 
-    /// The model to use.
-    #[arg(long, default_value = "1.1-2b-it")]
-    which: Which,
-
     #[arg(long)]
     use_flash_attn: bool,
 }
@@ -227,12 +211,8 @@ fn main() -> Result<()> {
 
     let start = std::time::Instant::now();
     let api = Api::new()?;
-    let model_id = match &args.model_id {
-        Some(model_id) => model_id.to_string(),
-        None => match args.which {
-            Which::InstructV1_1_2B => "google/gemma-1.1-2b-it".to_string(),
-        },
-    };
+    let model_id =  "google/gemma-1.1-2b-it".to_string();
+
     let repo = api.repo(Repo::with_revision(
         model_id,
         RepoType::Model,
@@ -264,19 +244,11 @@ fn main() -> Result<()> {
         DType::F32
     };
     let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device)? };
-    let model = if args.which.is_v1() {
-        let config: Config1 = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
-        let model = Model1::new(args.use_flash_attn, &config, vb)?;
-        Model::V1(model)
-    } else {
-        // let config: Config2 = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
-        // let model = Model2::new(args.use_flash_attn, &config, vb)?;
-        // Model::V2(model)
-        // [adhoc]
-        let config: Config1 = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
-        let model = Model1::new(args.use_flash_attn, &config, vb)?;
-        Model::V1(model)
-    };
+
+    let config: Config1 = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
+    let model_temp = Model1::new(args.use_flash_attn, &config, vb)?;
+    let model = Model::V1(model_temp);
+
 
     println!("loaded the model in {:?}", start.elapsed());
 
