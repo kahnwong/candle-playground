@@ -12,9 +12,6 @@ use hf_hub::{api::sync::Api, Repo, RepoType};
 use token_output_stream::TokenOutputStream;
 use tokenizers::Tokenizer;
 
-
-
-
 enum Model {
     V1(Model1),
     // V2(Model2),
@@ -136,7 +133,6 @@ struct Args {
     #[arg(long)]
     prompt: String,
 
-
     /// Nucleus sampling probability cutoff.
     #[arg(long)]
     top_p: Option<f64>,
@@ -152,18 +148,11 @@ struct Args {
     #[arg(long)]
     model_id: Option<String>,
 
-    #[arg(long, default_value = "main")]
-    revision: String,
-
-    #[arg(long)]
-    tokenizer_file: Option<String>,
-
     #[arg(long)]
     config_file: Option<String>,
 
     #[arg(long)]
     weight_files: Option<String>,
-
 
     #[arg(long)]
     use_flash_attn: bool,
@@ -184,7 +173,7 @@ fn main() -> Result<()> {
     /// Penalty to be applied for repeating tokens, 1. means no penalty.
     const REPEAT_PENALTY: f32 = 1.1;
     /// The context size to consider for the repeat penalty.
-    const REPEAT_LAST_N: usize= 64;
+    const REPEAT_LAST_N: usize = 64;
 
     println!(
         "temp: {:.2} repeat-penalty: {:.2} repeat-last-n: {}",
@@ -193,31 +182,25 @@ fn main() -> Result<()> {
         REPEAT_LAST_N
     );
 
+    // ------------ init model ------------
     let start = std::time::Instant::now();
-    let api = Api::new()?;
-    let model_id =  "google/gemma-1.1-2b-it".to_string();
 
+    let api = Api::new()?;
+    let model_id = "google/gemma-1.1-2b-it".to_string();
     let repo = api.repo(Repo::with_revision(
         model_id,
         RepoType::Model,
-        args.revision,
+        "main".to_string(),
     ));
-    let tokenizer_filename = match args.tokenizer_file {
-        Some(file) => std::path::PathBuf::from(file),
-        None => repo.get("tokenizer.json")?,
-    };
-    let config_filename = match args.config_file {
-        Some(file) => std::path::PathBuf::from(file),
-        None => repo.get("config.json")?,
-    };
-    let filenames = match args.weight_files {
-        Some(files) => files
-            .split(',')
-            .map(std::path::PathBuf::from)
-            .collect::<Vec<_>>(),
-        None => candle_server_utils::hub_load_safetensors(&repo, "model.safetensors.index.json")?,
-    };
+
+    let tokenizer_filename = repo.get("tokenizer.json")?;
+    let config_filename = repo.get("config.json")?;
+
+    let filenames =
+        candle_server_utils::hub_load_safetensors(&repo, "model.safetensors.index.json")?;
     println!("retrieved the files in {:?}", start.elapsed());
+
+    // ------------------------------------
     let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
 
     let start = std::time::Instant::now();
@@ -232,7 +215,6 @@ fn main() -> Result<()> {
     let config: Config1 = serde_json::from_reader(std::fs::File::open(config_filename)?)?;
     let model_temp = Model1::new(args.use_flash_attn, &config, vb)?;
     let model = Model::V1(model_temp);
-
 
     println!("loaded the model in {:?}", start.elapsed());
 
